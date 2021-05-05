@@ -16,7 +16,7 @@ class STN3d(nn.Module):
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 9)
+        self.fc3 = nn.Linear(256, 16)
         self.relu = nn.ReLU()
 
         self.bn1 = nn.BatchNorm1d(64)
@@ -42,7 +42,7 @@ class STN3d(nn.Module):
         if x.is_cuda:
             iden = iden.cuda()
         x = x + iden
-        x = x.view(-1, 3, 3)
+        x = x.view(-1, 4, 4)
         return x
 
 
