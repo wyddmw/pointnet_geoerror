@@ -88,15 +88,15 @@ class PointNetfeat(nn.Module):
     def __init__(self, global_feat = True, feature_transform = False):
         super(PointNetfeat, self).__init__()
         self.stn = STN3d()
-        self.conv1 = torch.nn.Conv1d(3, 64, 1)      # point shape N point_num xyz=3 -> N point_num 64
-        self.conv2 = torch.nn.Conv1d(64, 128, 1)    # feature shape N point_num 128
-        self.conv3 = torch.nn.Conv1d(128, 1024, 1)  # feature shape N point_num 1024
+        self.conv1 = torch.nn.Conv1d(3, 64, 1)
+        self.conv2 = torch.nn.Conv1d(64, 128, 1)
+        self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.bn1 = nn.BatchNorm1d(64)
         self.bn2 = nn.BatchNorm1d(128)
         self.bn3 = nn.BatchNorm1d(1024)
         self.global_feat = global_feat
         self.feature_transform = feature_transform
-        if self.feature_transform:                  # 
+        if self.feature_transform:
             self.fstn = STNkd(k=64)
 
     def forward(self, x):
@@ -117,83 +117,35 @@ class PointNetfeat(nn.Module):
 
         pointfeat = x
         x = F.relu(self.bn2(self.conv2(x)))
-        x = self.bn3(self.conv3(x))                     # N num_point 1024
-        x = torch.max(x, 2, keepdim=True)[0]            # max pooling operation -> N 1024   global feature
-        x = x.view(-1, 1024)                            # batch_size * 1024
+        x = self.bn3(self.conv3(x))
+        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.view(-1, 1024)
         if self.global_feat:
             return x, trans, trans_feat
         else:
             x = x.view(-1, 1024, 1).repeat(1, 1, n_pts)
             return torch.cat([x, pointfeat], 1), trans, trans_feat
-
-class PointNetfeatureGeoError(PointNetfeat):
-    def __init__(self, global_feat=True, feature_transform=False, feature_encode=200):
-        super(PointNetfeatureGeoError, self).__init__(global_feat, feature_transform)
-        self.conv1 = torch.nn.Conv1d(3+feature_encode, 64, 1)
-    
-    def forward(self, x):
-        n_pts = x.size()[2]
-        trans = self.stn(x)
-        x = x.transpose(2, 1)
-        x = torch.bmm(x, trans)
-        x = x.transpose(2, 1)
-        x = F.relu(self.bn1(self.conv1(x)))
-
-        if self.feature_transform:
-            trans_feat = self.fstn(x)
-            x = x.transpose(2,1)
-            x = torch.bmm(x, trans_feat)
-            x = x.transpose(2,1)
-        else:
-            trans_feat = None
-
-        pointfeat = x
-        x = F.relu(self.bn2(self.conv2(x)))
-        x = self.bn3(self.conv3(x))                     # N num_point 1024
-        x = torch.max(x, 2, keepdim=True)[0]            # max pooling operation -> N 1024   global feature
-        x = x.view(-1, 1024)                            # batch_size * 1024
-        if self.global_feat:
-            return x, trans, trans_feat
-        else:
-            x = x.view(-1, 1024, 1).repeat(1, 1, n_pts)
-            return torch.cat([x, pointfeat], 1), trans, trans_feat
-
 
 class PointNetCls(nn.Module):
     def __init__(self, k=2, feature_transform=False):
-        # 初始化函数中定义网络结构
         super(PointNetCls, self).__init__()
         self.feature_transform = feature_transform
-        self.feat = PointNetfeat(global_feat=True, feature_transform=feature_transform) # input point cloud global feature shape is N * 1024    N indicates batch_size
-        self.fc1 = nn.Linear(1024, 512)         # fully connected 
+        self.feat = PointNetfeat(global_feat=True, feature_transform=feature_transform)
+        self.fc1 = nn.Linear(1024, 512)
         self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, k)            # classification for K classes 4*21
-        self.dropout = nn.Dropout(p=0.3)        # 神经元随机失活
+        self.fc3 = nn.Linear(256, k)
+        self.dropout = nn.Dropout(p=0.3)
         self.bn1 = nn.BatchNorm1d(512)
         self.bn2 = nn.BatchNorm1d(256)
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        # forward函数进行前向传播
         x, trans, trans_feat = self.feat(x)
         x = F.relu(self.bn1(self.fc1(x)))
         x = F.relu(self.bn2(self.dropout(self.fc2(x))))
         x = self.fc3(x)
-        return F.log_softmax(x, dim=1), trans, trans_feat       # 经过log_softmax之后得到21个分类上各自的概率
+        return F.log_softmax(x, dim=1), trans, trans_feat
 
-
-class PointNetClsGeoError(PointNetCls):
-    def __init__(self, k=21, feature_transform=False):
-        super(PointNetClsGeoError, self).__init__(k, feature_transform)
-        self.feat = PointNetfeatureGeoError(global_feat=True, feature_transform=feature_transform)
-    
-    def forward(self, x):
-        x, trans, trans_feat = self.feat(x)
-        x = F.relu(self.bn1(self.fc1(x)))
-        x = F.relu(self.bn2(self.dropout(self.fc2(x))))
-        x = self.fc3(x)
-        return F.log_softmax(x, dim=1), trans, trans_feat       # 经过log_softmax之后得到21个分类上各自的概率
-        
 
 class PointNetDenseCls(nn.Module):
     def __init__(self, k = 2, feature_transform=False):

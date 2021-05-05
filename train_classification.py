@@ -6,8 +6,8 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset import ShapeNetDataset, ModelNetDataset
-from pointnet.model import PointNetCls, feature_transform_regularizer
+from model.dataset import ShapeNetDataset, ModelNetDataset
+from model.model import PointNetCls, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -105,9 +105,11 @@ for epoch in range(opt.nepoch):
         target = target[:, 0]
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
+        print("target shape is ", target.shape)
         optimizer.zero_grad()
         classifier = classifier.train()
         pred, trans, trans_feat = classifier(points)        # 调用这个对象
+        print("pred shape is ", pred.shape)
         loss = F.nll_loss(pred, target)
         if opt.feature_transform:
             loss += feature_transform_regularizer(trans_feat) * 0.001
