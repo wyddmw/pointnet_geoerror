@@ -85,6 +85,8 @@ optimizer = optim.Adam(classifier.parameters(), lr=0.0001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 classifier.cuda()
 
+loss = nn.CrossEntropyLoss()
+
 num_batch = len(train_dataset) / opt.batchSize
 
 for epoch in range(opt.nepoch):
@@ -97,14 +99,15 @@ for epoch in range(opt.nepoch):
         optimizer.zero_grad()
         classifier = classifier.train()
         pred, trans, trans_feat = classifier(points)        # 调用这个对象
-        loss = F.nll_loss(pred, target)
+        cls_loss = loss(pred, target)
+        
         if opt.feature_transform:
-            loss += feature_transform_regularizer(trans_feat) * 0.001
-        loss.backward()
+            cls_loss += feature_transform_regularizer(trans_feat) * 0.001
+        cls_loss.backward()
         optimizer.step()
         pred_choice = pred.data.max(1)[1]
         correct = pred_choice.eq(target.data).cpu().sum()
-        print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batchSize)))
+        print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
 
         # if i % 10 == 0:
         #     j, data = next(enumerate(testdataloader, 0))
