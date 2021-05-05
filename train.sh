@@ -1,1 +1,1 @@
-python train_classification_geoerror.py --data_path '/home/spyder/hazel/pointnet_geoerror/dataload-V2/origin/' --nepoch=5  --batchSize 4 --label_path '/home/spyder/hazel/pointnet_geoerror/dataload-V2/label13.csv' --numpy_path '/home/spyder/hazel/pointnet_geoerror/dataload-V2/all_data.txt'
+python train_classification_geoerror.py --data_path '/home/spyder/hazel/dataload-V2/origin/' --nepoch=5  --batchSize 4 --label_path '/home/spyder/hazel/dataload-V2/label13.csv' --numpy_path '/home/spyder/hazel/dataload-V2/all_data.txt'
