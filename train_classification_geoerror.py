@@ -7,7 +7,7 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 # from pointnet.dataset import ShapeNetDataset, ModelNetDataset
-# from model.csv_reader import DataFolder, GenerateData
+
 from model.dataset_geoerror import DataFolder, GenerateData
 from model.model import PointNetClsGeoerror, feature_transform_regularizer
 import torch.nn.functional as F
@@ -55,13 +55,13 @@ train_label, test_label = dataset.generate_lable()
 
 
 dataloader = torch.utils.data.DataLoader(
-    train_dataset,
+    DataFolder(train_dataset, train_label),
     batch_size=opt.batchSize,
     shuffle=True,
     num_workers=int(opt.workers))
 
 testdataloader = torch.utils.data.DataLoader(
-        test_dataset,
+        DataFolder(test_dataset, test_label),
         batch_size=opt.batchSize,
         shuffle=False,
         num_workers=int(opt.workers))
