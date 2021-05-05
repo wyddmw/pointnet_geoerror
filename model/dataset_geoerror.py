@@ -37,11 +37,7 @@ class GenerateData():
         self.csv_file = sorted(self.csv_file, key=lambda index: int(index.split('.')[0].split('_')[1]))
     
     def generate_data(self):
-        self._file_split()
-        initial_flag = False            # 表示最初第一次的数据拼接，是第一行和第二行进行拼接剩下的都是当前训练数据和下一行进行拼接
-        temp_data = None
         all_data = None
-
         if os.path.exists(self.numpy_file):
             print('loading numpy file')
             # 如果存在numpy文件，直接进行读取，否则根据输入数据的路径重新制作数据集
@@ -49,6 +45,9 @@ class GenerateData():
             print(all_data.shape)
 
         else:
+            self._file_split()
+            initial_flag = False            # 表示最初第一次的数据拼接，是第一行和第二行进行拼接剩下的都是当前训练数据和下一行进行拼接
+            temp_data = None
             # 不存在num偏移文件，根据路径来生成
             for file in self.csv_file:
                 print('writing file ', file)
