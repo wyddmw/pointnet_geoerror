@@ -121,19 +121,22 @@ def train(model, loss_func, num_batch, optimizer):
             correct = pred_choice.eq(target.data).cpu().sum()
             print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
 
-        if i % opt.validate_freq == 0:
-            j, (point, label) = next(enumerate(testdataloader, 0))
-            points = point.transpose(2, 1).cuda()
-            target = target.cuda()
+        # if i % opt.validate_freq == 0:
+        #     j, (point, label) = next(enumerate(testdataloader, 0))
+        #     points = point.transpose(2, 1).cuda()
+        #     target = target.cuda()
             
-            classifier = classifier.eval()
-            pred, _, _ = classifier(points)
-            loss = F.nll_loss(pred, target)
-            pred_choice = pred.data.max(1)[1]
-            correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
+        #     classifier = classifier.eval()
+        #     pred, _, _ = classifier(points)
+        #     loss = F.nll_loss(pred, target)
+        #     pred_choice = pred.data.max(1)[1]
+        #     correct = pred_choice.eq(target.data).cpu().sum()
+        #     print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
 
-    torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
+        torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
+        
+        if epoch % opt.validate_freq == 0:
+            validate(classifier)
 
 def validate(classifier):
     total_correct = 0
