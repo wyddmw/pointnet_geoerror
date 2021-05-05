@@ -81,7 +81,7 @@ classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_tr
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))
 
-optimizer = optim.Adam(classifier.parameters(), lr=0.001, betas=(0.9, 0.999))
+optimizer = optim.Adam(classifier.parameters(), lr=0.0001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 classifier.cuda()
 
