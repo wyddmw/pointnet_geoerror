@@ -105,7 +105,7 @@ for epoch in range(opt.nepoch):
         target = target[:, 0]
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
-        print("target shape is ", target.shape)
+        print("target is ", target)
         optimizer.zero_grad()
         classifier = classifier.train()
         pred, trans, trans_feat = classifier(points)        # 调用这个对象
