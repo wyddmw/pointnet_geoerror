@@ -7,8 +7,6 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-# from pointnet.dataset import ShapeNetDataset, ModelNetDataset
-
 from model.dataset_geoerror import DataFolder, GenerateData
 from model.model import PointNetClsGeoerror, feature_transform_regularizer
 import torch.nn.functional as F
@@ -36,15 +34,9 @@ parser.add_argument(
 parser.add_argument(
     '--cls_num', type=int, default=21, help='num classes for training'
 )
-parser.add_argument(
-    '--lr', type=float, default=1e-4, help='initialize training learning rate'
-)
-parser.add_argument(
-    '--validate_freq', type=int, default=10, help='indicate the frequency of validation'
-)
-parser.add_argument('--mode', type=str, default='train', help='indicate the mode of training or testing')
 parser.add_argument('--outf', type=str, default='cls', help='output folder')
 parser.add_argument('--model', type=str, default='', help='model path')
+parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained model to load')
 parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
 
 opt = parser.parse_args()
@@ -60,6 +52,7 @@ torch.manual_seed(opt.manualSeed)
 dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_path, random_select=False)
 train_dataset, test_dataset = dataset.generate_data()
 train_label, test_label = dataset.generate_lable()
+
 
 dataloader = torch.utils.data.DataLoader(
     DataFolder(train_dataset, train_label),
@@ -88,67 +81,61 @@ classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_tr
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))
 
-optimizer = optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.9, 0.999))
+optimizer = optim.Adam(classifier.parameters(), lr=0.0001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 classifier.cuda()
 
-# define loss function
 loss = nn.CrossEntropyLoss()
 
 num_batch = len(train_dataset) / opt.batchSize
 
-def train():
-    for epoch in range(opt.nepoch):
-        scheduler.step()
-        for i, (point, label) in enumerate(dataloader, 0):
-            point = point.transpose(2, 1)
-            points = point.cuda()
-            target = label.cuda()
+for epoch in range(opt.nepoch):
+    scheduler.step()
+    for i, (point, label) in enumerate(dataloader, 0):
+        point = point.transpose(2, 1)
+        points = point.cuda()
+        target = label.cuda()
+    
+        optimizer.zero_grad()
+        classifier = classifier.train()
+        pred, trans, trans_feat = classifier(points)        # 调用这个对象
+        cls_loss = loss(pred, target)
         
-            optimizer.zero_grad()
-            classifier = classifier.train()
-            pred, trans, trans_feat = classifier(points)        # 调用这个对象
-            cls_loss = loss(pred, target)
-            
-            if opt.feature_transform:
-                cls_loss += feature_transform_regularizer(trans_feat) * 0.001
-            cls_loss.backward()
-            optimizer.step()
-            pred_choice = pred.data.max(1)[1]
-            correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
+        if opt.feature_transform:
+            cls_loss += feature_transform_regularizer(trans_feat) * 0.001
+        cls_loss.backward()
+        optimizer.step()
+        pred_choice = pred.data.max(1)[1]
+        correct = pred_choice.eq(target.data).cpu().sum()
+        print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
 
-        if i % opt.validata_freq == 0:
-            j, (point, label) = next(enumerate(testdataloader, 0))
-            points = point.transpose(2, 1).cuda()
-            target = target.cuda()
-            
-            classifier = classifier.eval()
-            pred, _, _ = classifier(points)
-            loss = F.nll_loss(pred, target)
-            pred_choice = pred.data.max(1)[1]
-            correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
+        # if i % 10 == 0:
+        #     j, data = next(enumerate(testdataloader, 0))
+        #     points, target = data
+        #     target = target[:, 0]
+        #     points = points.transpose(2, 1)
+        #     points, target = points.cuda(), target.cuda()
+        #     classifier = classifier.eval()
+        #     pred, _, _ = classifier(points)
+        #     loss = F.nll_loss(pred, target)
+        #     pred_choice = pred.data.max(1)[1]
+        #     correct = pred_choice.eq(target.data).cpu().sum()
+        #     print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
 
     torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
-def validate():
-    total_correct = 0
-    total_testset = 0
-    for i, (point, label) in tqdm(enumerate(testdataloader, 0)):
-        points = point.transpose(2, 1).cuda()
-        target = label.cuda()
-        classifier = classifier.eval()
-        pred, _, _ = classifier(points)
-        pred_choice = pred.data.max(1)[1]
-        correct = pred_choice.eq(target.data).cpu().sum()
-        total_correct += correct.item()
-        total_testset += points.size()[0]
+total_correct = 0
+total_testset = 0
+for i,data in tqdm(enumerate(testdataloader, 0)):
+    points, target = data
+    target = target[:, 0]
+    points = points.transpose(2, 1)
+    points, target = points.cuda(), target.cuda()
+    classifier = classifier.eval()
+    pred, _, _ = classifier(points)
+    pred_choice = pred.data.max(1)[1]
+    correct = pred_choice.eq(target.data).cpu().sum()
+    total_correct += correct.item()
+    total_testset += points.size()[0]
 
-    print("final accuracy {}".format(total_correct / float(total_testset)))
-
-if __name__ == '__main__':
-    if opt.mode == 'train':
-        train()
-    else:
-        validate()
+print("final accuracy {}".format(total_correct / float(total_testset)))
