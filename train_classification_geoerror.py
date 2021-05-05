@@ -97,6 +97,7 @@ loss = nn.CrossEntropyLoss()
 
 num_batch = len(train_dataset) / opt.batchSize
 
+
 def train():
     for epoch in range(opt.nepoch):
         scheduler.step()
@@ -147,8 +148,11 @@ def validate():
 
     print("final accuracy {}".format(total_correct / float(total_testset)))
 
-if __name__ == '__main__':
+def main():
     if opt.mode == 'train':
         train()
     else:
         validate()
+
+if __name__ == '__main__':
+    main()
