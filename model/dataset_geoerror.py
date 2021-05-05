@@ -72,20 +72,26 @@ class GenerateData():
             np.savetxt(self.numpy_file, all_data, fmt='%f', delimiter=',')
 
         # split training data
-        # for i in range(4):      # 4:1的比例划分数据
-        #     if i > 0:
-        #         self.train_data = np.concatenate((self.train_data, all_data[i::5]), axis=0)
-        #     else:
-        #         self.train_data = all_data[::5]
+        for i in range(4):      # 4:1的比例划分数据
+            if i > 0:
+                self.train_data = np.concatenate((self.train_data, all_data[i::5]), axis=0)
+            else:
+                self.train_data = all_data[::5]
+        self.test_data = all_data[4::5]
+
+        num_train, _ = self.train_data.shape
+        num_test, _ = self.test_data.shape
         # split the dataset with a radio 4:1 
-        train_index = [i for i in range(4)]
-        N, _ = all_data.shape
+        #train_index = np.array([i for i in range(4)])
+        #print(train_index)
+        #print(type(train_index))
 
         if self.random_select:
             print("random select")
 
-        self.train_data = all_data[train_index::5].reshape(N, -1, 4)
-        self.test_data = all_data[4::5].reshape(N, -1, 4)
+        #self.train_data = all_data[train_index::5].reshape(N, -1, 4)
+        self.train_data = self.train_data.reshape(num_train, -1, 4)
+        self.test_data = all_data[4::5].reshape(num_test, -1, 4)
 
         print("train_data shape is ", self.train_data.shape)
         print("test data shape is ", self.test_data.shape)
@@ -95,15 +101,16 @@ class GenerateData():
         # 只使用
         all_label = np.loadtxt(self.label_path, delimiter=',', dtype=np.float32)
         all_label = all_label[:, 0].astype(np.int) - 1
+        print(all_label.shape)
         # all_label = all_label[:, 0] - 1
         
-        # for i in range(4):
-        #     if i > 0:
-        #         self.train_label = np.concatenate((self.train_label, all_label[i::5]), axis=0)
-        #     else:
-        #         self.train_label = all_label[::5]
-        train_index = [i for i in range(4)]
-        self.train_label = all_label[train_index::4]
+        for i in range(4):
+            if i > 0:
+                self.train_label = np.concatenate((self.train_label, all_label[i::5]), axis=0)
+            else:
+                self.train_label = all_label[::5]
+        # train_index = [i for i in range(4)]
+        # self.train_label = all_label[train_index::4]
         self.test_label = all_label[4::5]
 
         return self.train_label, self.test_label
