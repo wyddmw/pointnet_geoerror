@@ -7,8 +7,11 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 # from pointnet.dataset import ShapeNetDataset, ModelNetDataset
-from model.dataset_geoerror import DataFolder, GenerateData
-from model.model import PointNetClsGeoerror, feature_transform_regularizer
+# from model.csv_reader import DataFolder, GenerateData
+from modelself._file_split()
+        initial_flag = False            # 表示最初第一次的数据拼接，是第一行和第二行进行拼接剩下的都是当前训练数据和下一行进行拼接
+        temp_data = None
+from pointnet.model import PointNetClsGeoError, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -23,7 +26,7 @@ parser.add_argument(
 parser.add_argument(
     '--nepoch', type=int, default=250, help='number of epochs to train for')
 parser.add_argument(
-    '--data_path', type=str, help='file path for loading point cloud data'
+    'data_path', type=str, help='file path for loading point cloud data'
 )
 parser.add_argument(
     '--label_path', type=str, help='file path for loading label data'
@@ -48,7 +51,7 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed) 
 
-dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_path, random_select=False)
+dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_file, random_select=False)
 train_dataset, test_dataset = dataset.generate_data()
 train_label, test_label = dataset.generate_lable()
 
@@ -75,7 +78,7 @@ except OSError:
     pass
 
 # 实例化一个点云分类的对象
-classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform)
+classifier = PointNetClsGeoError(k=num_classes, feature_transform=opt.feature_transform)
 
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))
@@ -84,15 +87,14 @@ optimizer = optim.Adam(classifier.parameters(), lr=0.001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 classifier.cuda()
 
-num_batch = len(train_dataset) / opt.batchSize
+num_batch = len(dataset) / opt.batchSize
 
 for epoch in range(opt.nepoch):
     scheduler.step()
-    for i, data in enumerate(dataloader, 0):
-        points, target = data
-        target = target[:, 0]
-        points = points.transpose(2, 1)
-        points, target = points.cuda(), target.cuda()
+    for i, (point, label) in enumerate(dataloader, 0):
+        points = point.cuda()
+        target = label.cuda()
+    
         optimizer.zero_grad()
         classifier = classifier.train()
         pred, trans, trans_feat = classifier(points)        # 调用这个对象
@@ -105,18 +107,18 @@ for epoch in range(opt.nepoch):
         correct = pred_choice.eq(target.data).cpu().sum()
         print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, loss.item(), correct.item() / float(opt.batchSize)))
 
-        if i % 10 == 0:
-            j, data = next(enumerate(testdataloader, 0))
-            points, target = data
-            target = target[:, 0]
-            points = points.transpose(2, 1)
-            points, target = points.cuda(), target.cuda()
-            classifier = classifier.eval()
-            pred, _, _ = classifier(points)
-            loss = F.nll_loss(pred, target)
-            pred_choice = pred.data.max(1)[1]
-            correct = pred_choice.eq(target.data).cpu().sum()
-            print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
+        # if i % 10 == 0:
+        #     j, data = next(enumerate(testdataloader, 0))
+        #     points, target = data
+        #     target = target[:, 0]
+        #     points = points.transpose(2, 1)
+        #     points, target = points.cuda(), target.cuda()
+        #     classifier = classifier.eval()
+        #     pred, _, _ = classifier(points)
+        #     loss = F.nll_loss(pred, target)
+        #     pred_choice = pred.data.max(1)[1]
+        #     correct = pred_choice.eq(target.data).cpu().sum()
+        #     print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
 
     torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
