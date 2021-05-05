@@ -1,4 +1,4 @@
- import csv
+import csv
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -81,11 +81,15 @@ class GenerateData():
         # split the dataset with a radio 4:1 
         train_index = [i for i in range(4)]
         N, _ = all_data.shape
+
+        if self.random_select:
+            print("random select")
+
         self.train_data = all_data[train_index::5].reshape(N, -1, 4)
         self.test_data = all_data[4::5].reshape(N, -1, 4)
 
-        print(self.train_data.shape)
-        print(self.test_data.shape)
+        print("train_data shape is ", self.train_data.shape)
+        print("test data shape is ", self.test_data.shape)
         return self.train_data, self.test_data
         
     def generate_lable(self):
