@@ -38,7 +38,7 @@ class STN3d(nn.Module):
         x = F.relu(self.bn5(self.fc2(x)))
         x = self.fc3(x)
 
-        iden = Variable(torch.from_numpy(np.array([1,0,0,0,1,0,0,0,1]).astype(np.float32))).view(1,9).repeat(batchsize,1)
+        iden = Variable(torch.from_numpy(np.array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]).astype(np.float32))).view(1,16).repeat(batchsize,1)
         if x.is_cuda:
             iden = iden.cuda()
         x = x + iden
