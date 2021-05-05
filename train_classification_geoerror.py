@@ -6,7 +6,8 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset import ShapeNetDataset, ModelNetDataset
+# from pointnet.dataset import ShapeNetDataset, ModelNetDataset
+from model.csv_reader import DataFolder, GenerateData
 from pointnet.model import PointNetClsGeoError, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -21,10 +22,20 @@ parser.add_argument(
     '--workers', type=int, help='number of data loading workers', default=4)
 parser.add_argument(
     '--nepoch', type=int, default=250, help='number of epochs to train for')
+parser.add_argument(
+    'data_path', type=str, help='file path for loading point cloud data'
+)
+parser.add_argument(
+    '--label_path', type=str, help='file path for loading label data'
+)
+parser.add_argument(
+    '--numpy_path', type=str, help='file path for loading data numpy'
+)
+parser.add_argument(
+    '--cls_num', type=int, default=21, help='num classes for training'
+)
 parser.add_argument('--outf', type=str, default='cls', help='output folder')
 parser.add_argument('--model', type=str, default='', help='model path')
-parser.add_argument('--dataset', type=str, required=True, help="dataset path")
-parser.add_argument('--dataset_type', type=str, default='shapenet', help="dataset type shapenet|modelnet40")
 parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
 
 opt = parser.parse_args()
@@ -35,37 +46,15 @@ blue = lambda x: '\033[94m' + x + '\033[0m'
 opt.manualSeed = random.randint(1, 10000)  # fix seed
 print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
-torch.manual_seed(opt.manualSeed)
+torch.manual_seed(opt.manualSeed) 
 
-if opt.dataset_type == 'shapenet':
-    dataset = ShapeNetDataset(
-        root=opt.dataset,
-        classification=True,
-        npoints=opt.num_points)
-
-    test_dataset = ShapeNetDataset(
-        root=opt.dataset,
-        classification=True,
-        split='test',
-        npoints=opt.num_points,
-        data_augmentation=False)
-elif opt.dataset_type == 'modelnet40':
-    dataset = ModelNetDataset(
-        root=opt.dataset,
-        npoints=opt.num_points,
-        split='trainval')
-
-    test_dataset = ModelNetDataset(
-        root=opt.dataset,
-        split='test',
-        npoints=opt.num_points,
-        data_augmentation=False)
-else:
-    exit('wrong dataset type')
+dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_file, random_select=False)
+train_dataset, test_dataset = dataset.generate_data()
+train_label, test_label = dataset.generate_lable()
 
 
 dataloader = torch.utils.data.DataLoader(
-    dataset,
+    train_dataset,
     batch_size=opt.batchSize,
     shuffle=True,
     num_workers=int(opt.workers))
@@ -73,11 +62,11 @@ dataloader = torch.utils.data.DataLoader(
 testdataloader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=opt.batchSize,
-        shuffle=True,
+        shuffle=False,
         num_workers=int(opt.workers))
 
-print(len(dataset), len(test_dataset))
-num_classes = len(dataset.classes)
+print(len(train_dataset), len(test_dataset))
+num_classes = opt.cls_num
 print('classes', num_classes)
 
 try:
@@ -90,7 +79,6 @@ classifier = PointNetClsGeoError(k=num_classes, feature_transform=opt.feature_tr
 
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))
-
 
 optimizer = optim.Adam(classifier.parameters(), lr=0.001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
