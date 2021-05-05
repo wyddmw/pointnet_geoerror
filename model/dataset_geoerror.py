@@ -84,6 +84,8 @@ class GenerateData():
         self.train_data = all_data[train_index::5].reshape(N, -1, 4)
         self.test_data = all_data[4::5].reshape(N, -1, 4)
 
+        print(self.train_data.shape)
+        print(self.test_data.shape)
         return self.train_data, self.test_data
         
     def generate_lable(self):
