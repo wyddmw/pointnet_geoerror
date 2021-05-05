@@ -90,6 +90,7 @@ num_batch = len(train_dataset) / opt.batchSize
 for epoch in range(opt.nepoch):
     scheduler.step()
     for i, (point, label) in enumerate(dataloader, 0):
+        points = points.transpose(2, 1)
         points = point.cuda()
         target = label.cuda()
     
