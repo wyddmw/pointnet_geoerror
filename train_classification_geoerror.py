@@ -84,8 +84,9 @@ except OSError:
 
 # 实例化一个点云分类的对象
 classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform)
+print('initialize a classifier')
 
-if opt.model != '':
+if opt.model != 'None':
     classifier.load_state_dict(torch.load(opt.model))
 
 optimizer = optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.9, 0.999))
@@ -98,7 +99,8 @@ loss = nn.CrossEntropyLoss()
 num_batch = len(train_dataset) / opt.batchSize
 
 
-def train():
+def train(model, loss_func, num_batch, optimizer):
+    classifier = model
     for epoch in range(opt.nepoch):
         scheduler.step()
         for i, (point, label) in enumerate(dataloader, 0):
@@ -109,7 +111,7 @@ def train():
             optimizer.zero_grad()
             classifier = classifier.train()
             pred, trans, trans_feat = classifier(points)        # 调用这个对象
-            cls_loss = loss(pred, target)
+            cls_loss = loss_func(pred, target)
             
             if opt.feature_transform:
                 cls_loss += feature_transform_regularizer(trans_feat) * 0.001
@@ -119,7 +121,7 @@ def train():
             correct = pred_choice.eq(target.data).cpu().sum()
             print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
 
-        if i % opt.validata_freq == 0:
+        if i % opt.validate_freq == 0:
             j, (point, label) = next(enumerate(testdataloader, 0))
             points = point.transpose(2, 1).cuda()
             target = target.cuda()
@@ -133,7 +135,7 @@ def train():
 
     torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
 
-def validate():
+def validate(classifier):
     total_correct = 0
     total_testset = 0
     for i, (point, label) in tqdm(enumerate(testdataloader, 0)):
@@ -150,9 +152,9 @@ def validate():
 
 def main():
     if opt.mode == 'train':
-        train()
+        train(classifier, loss, num_batch, optimizer)
     else:
-        validate()
+        validate(classifier)
 
 if __name__ == '__main__':
     main()
