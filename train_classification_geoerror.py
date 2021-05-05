@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.utils.data
 # from pointnet.dataset import ShapeNetDataset, ModelNetDataset
 from model.csv_reader import DataFolder, GenerateData
-from pointnet.model import PointNetClsGeoError, feature_transform_regularizer
+from model.model import PointNetClsGeoerror, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -23,7 +23,7 @@ parser.add_argument(
 parser.add_argument(
     '--nepoch', type=int, default=250, help='number of epochs to train for')
 parser.add_argument(
-    'data_path', type=str, help='file path for loading point cloud data'
+    '--data_path', type=str, help='file path for loading point cloud data'
 )
 parser.add_argument(
     '--label_path', type=str, help='file path for loading label data'
@@ -48,7 +48,7 @@ print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed) 
 
-dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_file, random_select=False)
+dataset = GenerateData(opt.data_path, opt.label_path, opt.numpy_path, random_select=False)
 train_dataset, test_dataset = dataset.generate_data()
 train_label, test_label = dataset.generate_lable()
 
@@ -75,7 +75,7 @@ except OSError:
     pass
 
 # 实例化一个点云分类的对象
-classifier = PointNetClsGeoError(k=num_classes, feature_transform=opt.feature_transform)
+classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform)
 
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))
