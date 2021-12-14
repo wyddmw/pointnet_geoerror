@@ -1,5 +1,6 @@
 from __future__ import print_function
 import argparse
+from math import gamma
 import os
 import random
 import torch
@@ -7,13 +8,13 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-# from pointnet.dataset import ShapeNetDataset, ModelNetDataset
 
-from model.dataset_geoerror import DataFolder, GenerateData
-from model.model import PointNetClsGeoerror, feature_transform_regularizer
+from dataset.dataset_geoerror import DataFolder, GenerateData
+from model.model import PointNetClsGeoerror, feature_transform_regularizer, Loss
 import torch.nn.functional as F
 from tqdm import tqdm
 
+from matplotlib import pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -45,8 +46,11 @@ parser.add_argument(
 parser.add_argument('--mode', type=str, default='train', help='indicate the mode of training or testing')
 parser.add_argument('--outf', type=str, default='cls', help='output folder')
 parser.add_argument('--model', type=str, default='', help='model path')
+parser.add_argument("--opt", type=str, default='', help='optimizer')
 parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
-
+parser.add_argument('--drop_prob', type=float, default=0.3, help='indicate the probablity for dropout')
+parser.add_argument('--step_size', type=int, default=20, help='indicate the step size for learning rate update')
+parser.add_argument('--step_gamma', type=float, default=0.5, help='indicate the gamma for learning rate update')
 opt = parser.parse_args()
 print(opt)
 
@@ -83,33 +87,45 @@ except OSError:
     pass
 
 # 实例化一个点云分类的对象
-classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform)
+classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform, drop_prob=opt.drop_prob)
 print('initialize a classifier')
 
 if opt.model != 'None':
     classifier.load_state_dict(torch.load(opt.model))
+if opt.opt == 'Adam':
+    print("using Adam optimizer")
+    optimizer = optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.9, 0.999))
+elif opt.opt == 'SGD':
+    print("using SGD optimizer")
+    optimizer = optim.SGD(classifier.parameters(), lr=opt.lr, momentum=0.9)
+else:
+    raise NotImplementedError
 
-optimizer = optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.9, 0.999))
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+# 控制学习率当前的设置是每20个epoch learning rate减小为原来的0.5倍
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opt.step_size, gamma=opt.step_gamma)
 classifier.cuda()
+loss = Loss()
 
-# define loss function
-loss = nn.CrossEntropyLoss()
-
+# 可视化损失函数以及分类的精度
 num_batch = len(train_dataset) / opt.batchSize
-
+train_acc = []
+test_acc = []
+epoch_list = []
 
 def train(model, loss_func, num_batch, optimizer):
     classifier = model
     for epoch in range(opt.nepoch):
+        acc_epoch = 0.
+        epoch_list.append(epoch)
         scheduler.step()
+        classifier = classifier.train()
+        total_correct_train = 0
+        total_trainset = 0
         for i, (point, label) in enumerate(dataloader, 0):
             point = point.transpose(2, 1)
             points = point.cuda()
             target = label.cuda()
-        
             optimizer.zero_grad()
-            classifier = classifier.train()
             pred, trans, trans_feat = classifier(points)        # 调用这个对象
             cls_loss = loss_func(pred, target)
             
@@ -117,47 +133,50 @@ def train(model, loss_func, num_batch, optimizer):
                 cls_loss += feature_transform_regularizer(trans_feat) * 0.001
             cls_loss.backward()
             optimizer.step()
-            pred_choice = pred.data.max(1)[1]
+            sigmoid = torch.nn.Sigmoid()
+            pred_choice = sigmoid(pred).data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
+            total_correct_train += correct.item()
+            total_trainset += point.size()[0]
+            acc_epoch = acc_epoch + correct.item() / float(opt.batchSize)
             print('[%d: %d/%d] train loss: %f accuracy: %f' % (epoch, i, num_batch, cls_loss.item(), correct.item() / float(opt.batchSize)))
-
-        # if i % opt.validate_freq == 0:
-        #     j, (point, label) = next(enumerate(testdataloader, 0))
-        #     points = point.transpose(2, 1).cuda()
-        #     target = target.cuda()
-            
-        #     classifier = classifier.eval()
-        #     pred, _, _ = classifier(points)
-        #     loss = F.nll_loss(pred, target)
-        #     pred_choice = pred.data.max(1)[1]
-        #     correct = pred_choice.eq(target.data).cpu().sum()
-        #     print('[%d: %d/%d] %s loss: %f accuracy: %f' % (epoch, i, num_batch, blue('test'), loss.item(), correct.item()/float(opt.batchSize)))
-
+        train_acc.append(acc_epoch / (len(dataloader)))
         torch.save(classifier.state_dict(), '%s/cls_model_%d.pth' % (opt.outf, epoch))
-        
         if epoch % opt.validate_freq == 0:
-            validate(classifier)
+            acc = validate(classifier)
+            test_acc.append(acc)
 
 def validate(classifier):
     total_correct = 0
     total_testset = 0
+    classifier.eval()
     for i, (point, label) in tqdm(enumerate(testdataloader, 0)):
-        points = point.transpose(2, 1).cuda()
+        point = point.transpose(2, 1).cuda()
         target = label.cuda()
-        classifier = classifier.eval()
-        pred, _, _ = classifier(points)
-        pred_choice = pred.data.max(1)[1]
+        pred, _, _ = classifier(point)
+        sigmoid = torch.nn.Sigmoid()
+        pred_choice = sigmoid(pred).data.max(1)[1]
         correct = pred_choice.eq(target.data).cpu().sum()
         total_correct += correct.item()
-        total_testset += points.size()[0]
-
-    print("final accuracy {}".format(total_correct / float(total_testset)))
+        total_testset += point.size()[0]
+    test_acc = total_correct / float(total_testset)
+    print("final accuracy {}".format(test_acc))
+    return test_acc
 
 def main():
     if opt.mode == 'train':
         train(classifier, loss, num_batch, optimizer)
     else:
         validate(classifier)
+    
+    # visualization
+    plt.plot(epoch_list, train_acc, linewidth=1, marker='.', markersize=8, label='train_acc')
+    plt.plot(epoch_list, test_acc, linewidth=1, marker='.', markersize=8, label='test_acc')
+    plt.legend()
+    plt.xlabel('epoch num')
+    plt.title('{:} drop_prob {:} batchsize  {:} lr {:} epochs result'.format(opt.drop_prob, opt.batchSize, opt.lr, opt.nepoch))
+    plt.savefig(opt.outf + '/vis.png')
+
 
 if __name__ == '__main__':
     main()

@@ -1,10 +1,12 @@
 import csv
+from pickle import TRUE
 import numpy as np
 import torch
 from torch.autograd import Variable
 import torch.utils.data as data
 import argparse
 import os
+import torchvision.transforms as transforms
 
 # parser = argparse.ArgumentParser(description='path to load csv')
 # parser.add_argument('--data_path', type=str, default='./', help='denotes the path to load training data file')
@@ -14,7 +16,7 @@ import os
 
 class GenerateData():
     def __init__(self, file_path, label_path, numpy_file, random_select=False):
-        print('generating data')
+        # print('generating data')
         super(GenerateData, self).__init__()
         self.csv_file = []      # 存放文件名的列表
         self.label = []         # 存放训练的标签
@@ -38,73 +40,68 @@ class GenerateData():
     
     def generate_data(self):
         all_data = None
-        if os.path.exists(self.numpy_file):
+        if os.path.isfile(self.numpy_file):
+            print(self.numpy_file)
             print('loading numpy file')
             # 如果存在numpy文件，直接进行读取，否则根据输入数据的路径重新制作数据集
             all_data = np.loadtxt(self.numpy_file, delimiter=',', dtype=np.float32)
-            print(all_data.shape)
+            # print(all_data.shape)
+            print('data 506 is ', all_data[505])
 
         else:
-            self._file_split()
+            if len(os.listdir(self.file_path)) > 1:
+                self._file_split()
+            else:
+                print(self.file_path)
+                print(os.listdir(self.file_path))
+                self.csv_file = os.listdir(self.file_path)
+
             initial_flag = False            # 表示最初第一次的数据拼接，是第一行和第二行进行拼接剩下的都是当前训练数据和下一行进行拼接
             temp_data = None
-            # 不存在num偏移文件，根据路径来生成
-            for file in self.csv_file:
-                print('writing file ', file)
-                read_data = np.loadtxt(file, delimiter=',', dtype=np.float32)
-                training_data = np.transpose(read_data)    # 对输入的数据进行转置 1024*3000
-
-                # 一个文件内的四次组合
-                for i in range(3):
-                    if i > 0:
-                        temp_data = np.concatenate((temp_data, training_data[i+1::4]), axis=1)
-                    else:
-                        temp_data = np.concatenate((training_data[i::4], training_data[i+1::4]), axis=1)
-
-                if initial_flag:
-                    all_data = np.concatenate((all_data, temp_data), axis=0)
-                else:
-                    all_data = temp_data
-                    initial_flag = True
-            
+            # 不存在numpy文件，根据路径来生成
+            for index, file in enumerate(self.csv_file):
+                # print('writing file ', file)
+                read_data = np.loadtxt(os.path.join(str(self.file_path), file), delimiter=',', dtype=np.float32)
+                all_data = np.concatenate((all_data, read_data), axis=1) if index > 0 else read_data
+                
             # writing to file
-            print('writing numpy file')
             np.savetxt(self.numpy_file, all_data, fmt='%f', delimiter=',')
 
         # split training data
-        # for i in range(4):      # 4:1的比例划分数据
-        #     if i > 0:
-        #         self.train_data = np.concatenate((self.train_data, all_data[i::5]), axis=0)
-        #     else:
-        #         self.train_data = all_data[::5]
-        # split the dataset with a radio 4:1 
-        train_index = [i for i in range(4)]
-        N, _ = all_data.shape
+        for i in range(4):      # 4:1的比例划分数据
+            if i > 0:
+                self.train_data = np.concatenate((self.train_data, all_data[i::5]), axis=0)
+            else:
+                self.train_data = all_data[::5]
+        self.test_data = all_data[4::5]
 
-        if self.random_select:
-            print("random select")
+        num_train, _ = self.train_data.shape
+        num_test, _ = self.test_data.shape
 
-        self.train_data = all_data[train_index::5].reshape(N, -1, 4)
-        self.test_data = all_data[4::5].reshape(N, -1, 4)
+        #self.train_data = all_data[train_index::5].reshape(N, -1, 4)
+        data_line0 = all_data[0,0:4]
+        self.train_data = self.train_data.reshape(num_train, -1, 4)
+        train_data_index0 = self.train_data[0, 0]
+        self.test_data = all_data[4::5].reshape(num_test, -1, 4)
 
-        print("train_data shape is ", self.train_data.shape)
-        print("test data shape is ", self.test_data.shape)
         return self.train_data, self.test_data
         
     def generate_lable(self):
-        # 只使用
         all_label = np.loadtxt(self.label_path, delimiter=',', dtype=np.float32)
+
+        # print("all label index 0 is ", all_label[0])
         all_label = all_label[:, 0].astype(np.int) - 1
-        # all_label = all_label[:, 0] - 1
+        print('label 506 is ', all_label[505]+1)
         
-        # for i in range(4):
-        #     if i > 0:
-        #         self.train_label = np.concatenate((self.train_label, all_label[i::5]), axis=0)
-        #     else:
-        #         self.train_label = all_label[::5]
-        train_index = [i for i in range(4)]
-        self.train_label = all_label[train_index::4]
+        for i in range(4):
+            if i > 0:
+                self.train_label = np.concatenate((self.train_label, all_label[i::5]), axis=0)
+            else:
+                self.train_label = all_label[::5]
+
         self.test_label = all_label[4::5]
+
+        # import pdb; pdb.set_trace/()
 
         return self.train_label, self.test_label
 
@@ -115,10 +112,21 @@ class DataFolder(data.Dataset):
         self.input_data = input_data
         self.input_label = input_label
 
+    def __normalize(self, data):
+        
+        max = data.max(axis=0, keepdims=True)
+        # print(max.shape)
+        min = data.min(axis=0, keepdims=True)
+        data = (data - min) / (max - min)
+
+        return (data - 0.5) / 0.5
+        # return data
+
     def __getitem__(self, index):
+        self.input_data[index] = self.__normalize(self.input_data[index])
+        # print(self.input_data[index].max())
         data_index = self.input_data[index]
         label_index = self.input_label[index]
-
         return data_index, label_index
 
     def __len__(self):

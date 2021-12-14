@@ -8,3 +8,6 @@ shapenetcore_partanno_segmentation_benchmark_v0/
 cls/
 seg/
 *.egg-info/
+*.pth
+*.txt
+*.csv
