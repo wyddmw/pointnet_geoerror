@@ -11,3 +11,6 @@ seg/
 *.pth
 *.txt
 *.csv
+output/
+cls/
+random_alldata_29/
