@@ -10,7 +10,8 @@ import torch.optim as optim
 import torch.utils.data
 
 from dataset.dataset_geoerror import DataFolder, GenerateData
-from model.model import PointNetClsGeoerror, feature_transform_regularizer, Loss
+from model.pointnet import PointNetClsGeoerror, feature_transform_regularizer, Loss
+from model.pointnet_2 import PointNet2ClsGeoerror, Loss
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -45,7 +46,8 @@ parser.add_argument(
 )
 parser.add_argument('--mode', type=str, default='train', help='indicate the mode of training or testing')
 parser.add_argument('--outf', type=str, default='cls', help='output folder')
-parser.add_argument('--model', type=str, default='', help='model path')
+parser.add_argument('--pretrained', type=str, default='', help='model path')
+parser.add_argument('--model', type=str, default='pointnet', help='pointnet or pointnet2')
 parser.add_argument("--opt", type=str, default='', help='optimizer')
 parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
 parser.add_argument('--drop_prob', type=float, default=0.3, help='indicate the probablity for dropout')
@@ -87,11 +89,14 @@ except OSError:
     pass
 
 # 实例化一个点云分类的对象
-classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform, drop_prob=opt.drop_prob)
+if opt.model == 'pointnet':
+    classifier = PointNetClsGeoerror(k=num_classes, feature_transform=opt.feature_transform, drop_prob=opt.drop_prob)
+elif opt.model == 'pointnet2':
+    classifier = PointNetClsGeoerror(k=num_classes)
 print('initialize a classifier')
 
-if opt.model != 'None':
-    classifier.load_state_dict(torch.load(opt.model))
+if opt.pretrained != 'None':
+    classifier.load_state_dict(torch.load(opt.pretrained))
 if opt.opt == 'Adam':
     print("using Adam optimizer")
     optimizer = optim.Adam(classifier.parameters(), lr=opt.lr, betas=(0.9, 0.999))
