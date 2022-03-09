@@ -241,25 +241,41 @@ class PointNetCls(nn.Module):
 
 class PointNetClsGeoerror(nn.Module):
     # k表示的就是需要分类的类别数
-    def __init__(self, k=2, feature_transform=False, drop_prob=0.3):
+    def __init__(self, feature_transform=False, opt=None):
+        drop_prob = opt.drop_prob
+        cls_num = opt.cls_num
+        active_fn = opt.activate_fn
+        classifier = opt.classifier
         super(PointNetClsGeoerror, self).__init__()
         self.feature_transform = feature_transform
         self.feat = PointNetFeatGeoerror(global_feat=True, feature_transform=feature_transform)
         self.fc1 = nn.Linear(256, 128)
         self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, k)
+        self.fc3 = nn.Linear(64, cls_num)
         # dropout随机失活的概率 p的值越小 越容易过拟合， 默认的p=0.3
         self.dropout = nn.Dropout(p=drop_prob)
         self.bn1 = nn.BatchNorm1d(128)
         self.bn2 = nn.BatchNorm1d(64)
-        self.relu = nn.ReLU()
+        
+        if active_fn == 'relu':
+            self.active_fn = nn.ReLU()
+        elif active_fn == 'sigmoid':
+            self.active_fn = nn.Sigmoid()
+
+        if classifier == 'sigmoid':
+            self.classifier = nn.Sigmoid()
+        elif classifier == 'softmax':
+            self.classifier = nn.Softmax(dim=-1)
+
+        # self.relu = nn.ReLU()
 
     def forward(self, x):
         x, trans, trans_feat = self.feat(x)
-        x = F.relu(self.bn1(self.fc1(x)))
-        x = F.relu(self.bn2(self.dropout(self.fc2(x))))
+        x = self.active_fn(self.bn1(self.fc1(x)))
+        x = self.active_fn(self.bn2(self.dropout(self.fc2(x))))
         x = self.fc3(x)
-        return x, trans, trans_feat
+        prob = self.classifier(x)
+        return prob
 
 
 class Loss(nn.Module):

@@ -30,7 +30,6 @@ class GenerateData():
         self.random_select = False
 
     def _file_split(self):
-        print(self.file_path)
         for csv_file in os.listdir(self.file_path):
             csv_name = os.path.join(self.file_path, csv_file)
             self.csv_file.append(csv_name)
@@ -41,19 +40,12 @@ class GenerateData():
     def generate_data(self):
         all_data = None
         if os.path.isfile(self.numpy_file):
-            print(self.numpy_file)
-            print('loading numpy file')
             # 如果存在numpy文件，直接进行读取，否则根据输入数据的路径重新制作数据集
             all_data = np.loadtxt(self.numpy_file, delimiter=',', dtype=np.float32)
-            # print(all_data.shape)
-            print('data 506 is ', all_data[505])
-
         else:
             if len(os.listdir(self.file_path)) > 1:
                 self._file_split()
             else:
-                print(self.file_path)
-                print(os.listdir(self.file_path))
                 self.csv_file = os.listdir(self.file_path)
 
             initial_flag = False            # 表示最初第一次的数据拼接，是第一行和第二行进行拼接剩下的都是当前训练数据和下一行进行拼接
@@ -88,10 +80,7 @@ class GenerateData():
         
     def generate_lable(self):
         all_label = np.loadtxt(self.label_path, delimiter=',', dtype=np.float32)
-
-        # print("all label index 0 is ", all_label[0])
         all_label = all_label[:, 0].astype(np.int) - 1
-        print('label 506 is ', all_label[505]+1)
         
         for i in range(4):
             if i > 0:
@@ -101,43 +90,37 @@ class GenerateData():
 
         self.test_label = all_label[4::5]
 
-        # import pdb; pdb.set_trace/()
-
         return self.train_label, self.test_label
 
 
 class DataFolder(data.Dataset):
-    def __init__(self, input_data, input_label):
+    def __init__(self, input_data, input_label, opt, logger):
         super(DataFolder, self).__init__()
         self.input_data = input_data
         self.input_label = input_label
+        self.opt = opt
+        self.logger = logger
 
     def __normalize(self, data):
         
         max = data.max(axis=0, keepdims=True)
-        # print(max.shape)
         min = data.min(axis=0, keepdims=True)
         data = (data - min) / (max - min)
 
         return (data - 0.5) / 0.5
-        # return data
 
     def __getitem__(self, index):
-        self.input_data[index] = self.__normalize(self.input_data[index])
-        # print(self.input_data[index].max())
-        data_index = self.input_data[index]
-        label_index = self.input_label[index]
-        return data_index, label_index
+        # save point for visualization 
+        # point_vis = self.input_data[index]
+        # print(point_vis.shape)
+        # np.save('point.npy', point_vis)
+        if self.opt.normalize:
+            self.input_data[index] = self.__normalize(self.input_data[index])
+        data = self.input_data[index]
+        label = self.input_label[index]
+        return data, label
 
     def __len__(self):
         return len(self.input_data)
 
-if __name__ == '__main__':
-    # line = get_length()
-    # print(line)
-    # data_transform('./wine.csv')
-    # file_split(args.path)
-    # data_transform(args.path)
-    generate_data = GenerateData(args.data_path, args.label_path)
-    # generate_data._generate_training_data()
-    generate_data._generate_training_lable()
+

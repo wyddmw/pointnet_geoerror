@@ -11,3 +11,4 @@ shapenetcore_partanno_segmentation_benchmark_v0/
 *.csv
 output/
 .DS_Store
+*.sh
